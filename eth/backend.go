@@ -103,6 +103,7 @@ type Config struct {
 	AutoDAG   bool
 	PowTest   bool
 	ExtraData []byte
+	LightKDF  bool
 
 	MaxPeers        int
 	MaxPendingPeers int

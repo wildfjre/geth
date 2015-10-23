@@ -35,7 +35,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-
+"time"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/pborman/uuid"
@@ -44,20 +44,32 @@ import (
 )
 
 const (
-	keyHeaderKDF = "scrypt"
+	keyHeaderKDF  = "scrypt"
 	// 2^18 / 8 / 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
-	scryptN     = 1 << 18
-	scryptr     = 8
-	scryptp     = 1
-	scryptdkLen = 32
+	// 2^12 / 8 / 2 uses 4MB memory and approx 100ms CPU time on a modern CPU.
+	stdScryptN    = 1 << 18
+	lightScryptN  = 1 << 12
+	scryptR       = 8
+	stdScryptP    = 1
+	lightScryptP  = 1
+	scryptdkLen   = 32
+	
+	Standard      = 0
+	Light         = 1
 )
 
 type keyStorePassphrase struct {
 	keysDirPath string
+	scryptN int
+	scryptP int
 }
 
-func NewKeyStorePassphrase(path string) KeyStore {
-	return &keyStorePassphrase{path}
+func NewKeyStorePassphrase(path string, safety int) KeyStore {
+	if safety == Standard {
+		return &keyStorePassphrase{path, stdScryptN, stdScryptP}
+	} else {	
+		return &keyStorePassphrase{path, lightScryptN, lightScryptP}
+	}
 }
 
 func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
@@ -87,11 +99,12 @@ func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err 
 func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
 	salt := randentropy.GetEntropyCSPRNG(32)
-	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptr, scryptp, scryptdkLen)
+	now := time.Now()
+	derivedKey, err := scrypt.Key(authArray, salt, ks.scryptN, scryptR, ks.scryptP, scryptdkLen)
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("took: ", time.Since(now))
 	encryptKey := derivedKey[:16]
 	keyBytes := FromECDSA(key.PrivateKey)
 
@@ -104,9 +117,9 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	mac := Sha3(derivedKey[16:32], cipherText)
 
 	scryptParamsJSON := make(map[string]interface{}, 5)
-	scryptParamsJSON["n"] = scryptN
-	scryptParamsJSON["r"] = scryptr
-	scryptParamsJSON["p"] = scryptp
+	scryptParamsJSON["n"] = ks.scryptN
+	scryptParamsJSON["r"] = scryptR
+	scryptParamsJSON["p"] = ks.scryptP
 	scryptParamsJSON["dklen"] = scryptdkLen
 	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
 

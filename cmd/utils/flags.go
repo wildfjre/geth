@@ -153,6 +153,10 @@ var (
 		Value: 62,
 		Usage: "Highest eth protocol to advertise (temporary, dev option)",
 	}
+	LightKDFFlag = cli.BoolFlag{
+		Name:  "lightkdf",
+		Usage: "Reduce KDF iterations trading memory usage vs security",
+	}
 
 	// miner settings
 	// TODO: refactor CPU vs GPU mining flags
@@ -450,6 +454,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:                 MakeNodeKey(ctx),
+		LightKDF:                ctx.GlobalBool(LightKDFFlag.Name),
 		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:                    true,
 		BootNodes:               ctx.GlobalString(BootnodesFlag.Name),
@@ -579,7 +584,11 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		dataDir += "/testnet"
 	}
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
+	safety := crypto.Standard
+	if ctx.GlobalBool(LightKDFFlag.Name) {
+		safety = crypto.Light
+	}
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"), safety)
 	return accounts.NewManager(ks)
 }
 
