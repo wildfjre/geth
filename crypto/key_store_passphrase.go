@@ -33,42 +33,46 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"reflect"
-"time"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
+	"io"
+	"reflect"
+	"time"
 )
 
 const (
-	keyHeaderKDF  = "scrypt"
-	// 2^18 / 8 / 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
-	// 2^12 / 8 / 2 uses 4MB memory and approx 100ms CPU time on a modern CPU.
-	stdScryptN    = 1 << 18
-	lightScryptN  = 1 << 12
-	scryptR       = 8
-	stdScryptP    = 1
-	lightScryptP  = 1
-	scryptdkLen   = 32
-	
-	Standard      = 0
-	Light         = 1
+	keyHeaderKDF = "scrypt"
+	KDFStandard  = iota
+	KDFLight     = iota
+
+	// n,r,p = 2^18, 8, 1 uses 256MB memory and approx 1s CPU time on a modern CPU.
+	stdScryptN = 1 << 18
+	stdScryptP = 1
+
+	// n,r,p = 2^12, 8, 6 uses 4MB memory and approx 100ms CPU time on a modern CPU.
+	lightScryptN = 1 << 12
+	lightScryptP = 6
+
+	scryptR     = 8
+	scryptDKLen = 32
 )
 
 type keyStorePassphrase struct {
 	keysDirPath string
-	scryptN int
-	scryptP int
+	scryptN     int
+	scryptP     int
+	scryptR     int
+	scryptDKLen int
 }
 
 func NewKeyStorePassphrase(path string, safety int) KeyStore {
-	if safety == Standard {
-		return &keyStorePassphrase{path, stdScryptN, stdScryptP}
-	} else {	
-		return &keyStorePassphrase{path, lightScryptN, lightScryptP}
+	if safety == KDFStandard {
+		return &keyStorePassphrase{path, stdScryptN, stdScryptP, scryptR, scryptDKLen}
+	} else {
+		return &keyStorePassphrase{path, lightScryptN, lightScryptP, scryptR, scryptDKLen}
 	}
 }
 
@@ -100,7 +104,7 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 	authArray := []byte(auth)
 	salt := randentropy.GetEntropyCSPRNG(32)
 	now := time.Now()
-	derivedKey, err := scrypt.Key(authArray, salt, ks.scryptN, scryptR, ks.scryptP, scryptdkLen)
+	derivedKey, err := scrypt.Key(authArray, salt, ks.scryptN, ks.scryptR, ks.scryptP, ks.scryptDKLen)
 	if err != nil {
 		return err
 	}
@@ -118,9 +122,9 @@ func (ks keyStorePassphrase) StoreKey(key *Key, auth string) (err error) {
 
 	scryptParamsJSON := make(map[string]interface{}, 5)
 	scryptParamsJSON["n"] = ks.scryptN
-	scryptParamsJSON["r"] = scryptR
+	scryptParamsJSON["r"] = ks.scryptR
 	scryptParamsJSON["p"] = ks.scryptP
-	scryptParamsJSON["dklen"] = scryptdkLen
+	scryptParamsJSON["dklen"] = ks.scryptDKLen
 	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
 
 	cipherParamsJSON := cipherparamsJSON{

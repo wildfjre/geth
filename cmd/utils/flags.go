@@ -584,9 +584,9 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		dataDir += "/testnet"
 	}
-	safety := crypto.Standard
+	safety := crypto.KDFStandard
 	if ctx.GlobalBool(LightKDFFlag.Name) {
-		safety = crypto.Light
+		safety = crypto.KDFLight
 	}
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"), safety)
 	return accounts.NewManager(ks)
